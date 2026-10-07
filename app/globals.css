@@ -1,0 +1,25 @@
+/* Global tokens and resets only. Reusable component styles live in CSS Modules. */
+:root {
+  --background: #faf8f4;
+  --surface: #fffefd;
+  --ink: #36332e;
+  --muted: #827b70;
+  --border: #e8e3db;
+  --soft: #f5f2ed;
+  --accent: #a5653d;
+  --accent-hover: #8d5230;
+  --accent-soft: #f5e9de;
+  --focus: #d9b59455;
+}
+* { box-sizing: border-box; }
+html { color-scheme: light; }
+body { margin: 0; background: var(--background); color: var(--ink); font-family: "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif; -webkit-font-smoothing: antialiased; }
+button, input, textarea, select { font-family: inherit; }
+button, a, input, textarea, select { -webkit-tap-highlight-color: transparent; }
+button:focus-visible, a:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
+a { color: inherit; }
+fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+legend { padding: 0; margin-bottom: 8px; }
+::selection { background: #ead5bf; }
+.skip-link { position: absolute; left: 20px; top: -60px; padding: 12px; z-index: 100; background: var(--surface); color: var(--accent); }
+.skip-link:focus { top: 12px; }
