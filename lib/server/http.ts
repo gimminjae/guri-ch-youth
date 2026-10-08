@@ -10,7 +10,7 @@ import { deleteField, deletePrayer, getPrayer, listFields, queryPrayers, saveFie
 function json(value: unknown, status = 200, headers: Record<string, string> = {}) {
   return Response.json(value, { status, headers: { "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff", ...headers } });
 }
-export function checkOrigin(request: Request, configuredOrigin = process.env.APP_ORIGIN) {
+export function checkOrigin(request: Request, configuredOrigin = process.env.NEXT_PUBLIC_APP_ORIGIN) {
   if (["GET", "HEAD"].includes(request.method)) return;
   const origin = request.headers.get("origin");
   const expected = configuredOrigin ? new URL(configuredOrigin).origin : process.env.NODE_ENV !== "production" ? new URL(request.url).origin : null;
