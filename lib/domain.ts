@@ -1,4 +1,4 @@
-export const DATA_TYPES = ["selectbox", "selectmultibox", "checkbox", "string", "number", "date", "image", "file", "bool"] as const;
+export const DATA_TYPES = ["selectbox", "selectmultibox", "checkbox", "shorttext", "string", "number", "date", "image", "file", "bool"] as const;
 export type DataType = (typeof DATA_TYPES)[number];
 export const DISPLAY_TYPES = ["badge", "bold", "color"] as const;
 export type DisplayType = (typeof DISPLAY_TYPES)[number];
@@ -7,18 +7,20 @@ export type Role = (typeof ROLES)[number];
 export const ROLE_LABELS: Record<Role, string> = { member: "교회 구성원", "sub-admin": "부관리자", admin: "관리자" };
 export const TYPE_LABELS: Record<DataType, string> = {
   selectbox: "하나 선택", selectmultibox: "여러 개 선택", checkbox: "체크박스 그룹",
-  string: "글", number: "숫자", date: "날짜", image: "이미지", file: "파일", bool: "예 / 아니오",
+  shorttext: "짧은 텍스트", string: "글", number: "숫자", date: "날짜", image: "이미지", file: "파일", bool: "예 / 아니오",
 };
 export type Value = string | number | boolean;
 export type Content = Record<string, Value>;
-export type FieldInput = { name: string; datatype: DataType; displaytype: DisplayType[]; option: string[]; isGroupable: boolean; isFilterable: boolean };
-export type Field = FieldInput & { id: string; createDateTime: string; updateDateTime: string };
+export type FieldInput = { name: string; datatype: DataType; displaytype: DisplayType[]; option: string[]; isGroupable: boolean; isFilterable: boolean; isAggregatable: boolean; optionColors: Record<string, string> };
+export type Field = FieldInput & { isActive: boolean; listOrder: number; id: string; createDateTime: string; updateDateTime: string };
 export type Prayer = { id: string; content: Content; listdisplaydata: string[]; createDateTime: string; updateDateTime: string };
 export type Actor = { role: Role; sessionId: string; token: string };
 export type Filter = { fieldId: string; op: "eq" | "contains" | "in" | "range" | "empty" | "present"; value?: string | number | boolean | string[]; min?: string | number; max?: string | number };
 export type ListQuery = { filters: Filter[]; groupBy?: string; groupKey?: string | null; page: number };
-export type Group = { key: string | null; label: string; count: number };
-export type ListResult = { items: Prayer[]; groups: Group[]; total: number; page: number; pages: number; groupCount: number; groupPages: number };
+export type CountValue = { key: string | null; label: string; count: number };
+export type Summary = { fieldId: string; values: CountValue[]; total: number; valueCount: number; page: number; pages: number };
+export type Group = CountValue & { summaries: Summary[] };
+export type ListResult = { items: Prayer[]; groups: Group[]; total: number; page: number; pages: number; groupCount: number; groupPages: number; summaries: Summary[] };
 export const PAGE_SIZE = 12;
 export const LIMITS = { fields: 40, options: 60, text: 10000, fileBytes: 4 * 1024 * 1024 };
 export const isChoice = (type: DataType) => ["selectbox", "selectmultibox", "checkbox"].includes(type);
@@ -34,6 +36,14 @@ export function valueText(field: Field, value?: Value): string {
   if (isMulti(field.datatype)) return fromCsv(String(value)).join(" · ");
   if (isFile(field.datatype)) return field.datatype === "image" ? "첨부 이미지" : "첨부파일";
   return String(value);
+}
+
+export function filterText(filter: Filter): string {
+  if (filter.op === "empty") return "미입력";
+  if (filter.op === "present") return "첨부 있음";
+  if (filter.op === "range") return `${filter.min ?? "처음"} ~ ${filter.max ?? "끝"}`;
+  if (typeof filter.value === "boolean") return filter.value ? "예" : "아니오";
+  return `${filter.op === "contains" ? "포함: " : ""}${Array.isArray(filter.value) ? filter.value.join(" · ") : filter.value ?? ""}`;
 }
 
 export class AppError extends Error {
@@ -68,7 +78,13 @@ export function validateField(raw: unknown): FieldInput {
   if (isChoice(datatype) && !option.length) throw new AppError(400, "선택지를 하나 이상 입력해주세요.");
   if (!isChoice(datatype) && option.length) throw new AppError(400, "선택형 필드에만 선택지를 지정할 수 있습니다.");
   if (typeof input.isGroupable !== "boolean" || typeof input.isFilterable !== "boolean") throw new AppError(400, "그룹화·필터링 설정을 확인해주세요.");
-  return { name: input.name.trim(), datatype, displaytype, option, isGroupable: input.isGroupable, isFilterable: input.isFilterable };
+  const colors = object(input.optionColors ?? {}), optionColors: Record<string, string> = Object.create(null);
+  for (const [key, value] of Object.entries(colors)) {
+    if (!option.includes(key) || typeof value !== "string" || !/^#[0-9a-f]{6}$/i.test(value)) throw new AppError(400, "선택지 색상은 등록된 항목의 #RRGGBB 값으로 입력해주세요.");
+    optionColors[key] = value.toUpperCase();
+  }
+  if (input.isAggregatable !== undefined && typeof input.isAggregatable !== "boolean") throw new AppError(400, "집계 설정을 확인해주세요.");
+  return { name: input.name.trim(), datatype, displaytype, option, optionColors, isAggregatable: input.isAggregatable === true, isGroupable: input.isGroupable, isFilterable: input.isFilterable };
 }
 export function validateContent(raw: unknown, fields: Field[]): Content {
   const input = object(raw);
@@ -94,7 +110,8 @@ export function validateContent(raw: unknown, fields: Field[]): Content {
         continue;
       }
       if (isFile(field.datatype)) uuid(text);
-      if (field.datatype === "string" && !text.trim()) continue;
+      if (field.datatype === "shorttext" && /[\r\n]/.test(text)) fail();
+      if (["string", "shorttext"].includes(field.datatype) && !text.trim()) continue;
     }
     result[key] = value as Value;
   }
@@ -124,9 +141,9 @@ export function validateListQuery(raw: unknown, fields: Field[]): ListQuery {
       const values = stringArray(f.value);
       if (!values.length || values.some((v) => !field.option.includes(v))) invalid();
       filters.push({ fieldId, op: "in", value: values });
-    } else if (field.datatype === "string") {
-      if (op !== "contains" || typeof f.value !== "string" || !f.value.trim() || f.value.length > 500) invalid();
-      filters.push({ fieldId, op: "contains", value: (f.value as string).trim() });
+    } else if (["string", "shorttext"].includes(field.datatype)) {
+      if ((op !== "contains" && op !== "eq") || typeof f.value !== "string" || !f.value.trim() || f.value.length > (op === "eq" ? LIMITS.text : 500)) invalid();
+      filters.push({ fieldId, op: op as "contains" | "eq", value: (f.value as string).trim() });
     } else if (field.datatype === "bool") {
       if (op !== "eq" || typeof f.value !== "boolean") invalid();
       filters.push({ fieldId, op: "eq", value: f.value as boolean });

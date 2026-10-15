@@ -7,10 +7,10 @@ let client: S3Client | undefined;
 function s3() {
   if (!client) {
     client = new S3Client({
-      region: requiredEnv("NEXT_PUBLIC_AWS_REGION"),
+      region: requiredEnv("AWS_REGION", "NEXT_PUBLIC_AWS_REGION"),
       credentials: {
-        accessKeyId: requiredEnv("NEXT_PUBLIC_AWS_ACCESS_KEY_ID"),
-        secretAccessKey: requiredEnv("NEXT_PUBLIC_AWS_SECRET_ACCESS_KEY"),
+        accessKeyId: requiredEnv("AWS_ACCESS_KEY_ID", "NEXT_PUBLIC_AWS_ACCESS_KEY_ID"),
+        secretAccessKey: requiredEnv("AWS_SECRET_ACCESS_KEY", "NEXT_PUBLIC_AWS_SECRET_ACCESS_KEY"),
       },
     });
   }

@@ -1,0 +1,7 @@
+.picker { min-width: 110px; font-size: .8rem; }
+.picker summary { display: flex; align-items: center; gap: .4rem; cursor: pointer; padding: .45rem; }
+.swatch { width: 18px; height: 18px; border-radius: 5px; border: 1px solid #0003; flex-shrink: 0; }
+.panel { display: grid; gap: .7rem; margin-top: .4rem; padding: .8rem; border: 1px solid var(--border); border-radius: 12px; max-width: 240px; }
+.panel legend { font-size: .75rem; }
+.panel :global(.react-colorful) { width: 100%; height: 130px; }
+.panel:disabled { opacity: .5; pointer-events: none; }

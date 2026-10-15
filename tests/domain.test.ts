@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { validateContent, validateField, validateListQuery, type Field, dateValid, fromCsv, toCsv } from "../lib/domain";
 
-const makeField = (datatype: Field["datatype"], id: string): Field => ({ id, datatype, name: datatype, option: [], displaytype: [], isGroupable: true, isFilterable: true, createDateTime: "", updateDateTime: "" });
+const makeField = (datatype: Field["datatype"], id: string): Field => ({ id, datatype, name: datatype, isActive: true, listOrder: 0, optionColors: {}, isAggregatable: false, option: [], displaytype: [], isGroupable: true, isFilterable: true, createDateTime: "", updateDateTime: "" });
 const text = makeField("string", "00000000-0000-4000-8000-000000000001");
 const num = makeField("number", "00000000-0000-4000-8000-000000000002");
 const bool = makeField("bool", "00000000-0000-4000-8000-000000000003");

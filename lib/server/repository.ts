@@ -1,10 +1,20 @@
 import "server-only";
-import { object, uuid, validateField, type Actor, type Field, type ListResult, type Prayer } from "@/lib/domain";
+import { AppError, object, uuid, validateField, type Actor, type Field, type ListResult, type Prayer } from "@/lib/domain";
 import type { Database } from "./database";
 import { requireRole } from "./auth";
 
 export async function listFields(db: Database, actor: Actor | null = null): Promise<Field[]> {
   return db.rpc("fields", {}, actor?.token);
+}
+export async function manageFields(db: Database, actor: Actor): Promise<Field[]> {
+  requireRole(actor, ["admin"]);
+  return db.rpc("manage_fields", {}, actor.token);
+}
+export async function setFieldActive(db: Database, actor: Actor, id: string, raw: unknown): Promise<Field> {
+  requireRole(actor, ["admin"]);
+  const body = object(raw);
+  if (typeof body.isActive !== "boolean") throw new AppError(400, "필드 사용 상태를 확인해주세요.");
+  return db.rpc("set_field_active", { id: uuid(id), isActive: body.isActive, updateDateTime: body.updateDateTime }, actor.token);
 }
 export async function saveField(db: Database, actor: Actor, raw: unknown, id?: string): Promise<Field> {
   requireRole(actor, ["admin"]);

@@ -8,4 +8,4 @@ const handler = createHandler(database, storage);
 async function route(request: Request, context: { params: Promise<{ path: string[] }> }) {
   return handler(request, (await context.params).path);
 }
-export { route as GET, route as POST, route as PUT, route as DELETE };
+export { route as GET, route as POST, route as PUT, route as PATCH, route as DELETE };

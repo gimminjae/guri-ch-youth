@@ -28,7 +28,7 @@ npm run db:prepare
 
 비밀번호 등록 없이 DB 구조와 RPC 연결만 먼저 준비하려면 `npm run db:prepare -- --schema-only`를 사용한다. 이 경우 로그인 전 세 초기 비밀번호를 설정하고 기본 명령으로 SQL을 다시 생성·적용해야 한다.
 
-4. 생성된 `.local/supabase-setup.sql` 전체 내용을 Supabase **SQL Editor → New query**에서 실행한다. 끝에 `{"data":{"version":3}}`가 표시되면 함수 설치가 완료된 것이다.
+4. 생성된 `.local/supabase-setup.sql` 전체 내용을 Supabase **SQL Editor → New query**에서 실행한다. 끝에 `{"data":{"version":5}}`가 표시되면 함수 설치가 완료된 것이다.
 5. 앱에서 연결을 확인하고 실행한다.
 
 ```sh
@@ -58,7 +58,41 @@ npm run db:seed
 
 기존 DB에는 `supabase/migrations/20261007150623_public_prayer_read.sql`을 Supabase SQL Editor에서 실행한다. 기존 데이터와 비밀번호는 유지하며 RPC 설치 버전이 3으로 바뀐다. 이번 변경은 테이블 직접 접근 권한을 추가하지 않고, 기존 RPC의 조회 작업만 공개한다.
 
-마이그레이션 이력도 함께 관리하려면 `npm run db:prepare -- --schema-only`로 `.local/supabase-setup.sql`을 생성하고 SQL Editor에서 실행한다. 기본 테이블 SQL만 수동 설치해 이력이 없는 DB는 `--existing-schema`도 지정한다. 적용 후 `npm run db:check`로 버전 3을 확인한다. publishable key로는 스키마 변경 SQL을 자동 적용할 수 없다.
+마이그레이션 이력도 함께 관리하려면 `npm run db:prepare -- --schema-only`로 `.local/supabase-setup.sql`을 생성하고 SQL Editor에서 실행한다. 기본 테이블 SQL만 수동 설치해 이력이 없는 DB는 `--existing-schema`도 지정한다. 현재 코드의 `npm run db:check`는 최신 버전 5를 확인하므로 아래 그리드·필드 미사용 업데이트도 적용한다. publishable key로는 스키마 변경 SQL을 자동 적용할 수 없다.
+
+## 그리드·집계·엑셀 업데이트 (RPC 버전 4)
+
+새 마이그레이션은 `supabase/migrations/20261008045525_grid_summary_excel.sql`이다. `listOrder`, `optionColors`, `isAggregatable`, `shorttext`, 집계·엑셀 RPC와 비공개 가져오기 작업 테이블을 추가한다. 기존 기도 내용·목록 표시 선택·비밀번호·세션을 보존하며, 순서는 생성 시각과 UUID 기준으로 처음 채운다. 집계는 기본적으로 꺼져 있다.
+
+마이그레이션 이력을 관리하는 기존 DB에는 다음으로 만든 SQL을 SQL Editor에서 실행한다.
+
+```sh
+npm run db:prepare -- --schema-only
+# 생성한 .local/supabase-setup.sql 전체를 Supabase SQL Editor에서 실행
+npm run db:check
+```
+
+기본 테이블을 SQL Editor로 직접 설치해 `prayer_migrations.history` 이력이 없는 DB는 `npm run db:prepare -- --schema-only --existing-schema`로 생성한다. 이미 앞선 마이그레이션을 적용한 DB에 새 SQL 파일만 직접 실행하는 것도 가능하다. 새 파일의 재실행은 이미 설정한 순서와 데이터를 초기화하지 않는다. 정상 적용 시 `SELECT public.prayer_api('health');`의 결과는 `{"data":{"version":4}}`다.
+
+이 명령들은 SQL 파일 생성과 읽기 전용 설치 확인만 수행한다. 실제 클라우드 DB의 스키마 변경은 SQL Editor에서 실행해야 한다. 생성 파일에는 `--schema-only`를 사용할 경우 비밀번호가 포함되지 않는다.
+
+적용 후 관리자 **필드 관리**에서 열 순서를 저장하고 선택지 색상·집계 여부를 설정한다. 기존 필드의 색상과 집계는 자동으로 켜지지 않는다. `sub-admin`과 `admin`은 **엑셀** 메뉴에서 가져오기를 사용할 수 있다. [엑셀 안내](excel.md)
+
+엑셀 분석은 Node.js worker에서 실행한다. `next.config.ts`에 ExcelJS 서버 외부 패키지와 worker 파일 추적을 설정했다. 정적 호스팅이 아닌 Node.js 런타임으로 배포한다. 입력 파일은 S3에 업로드하지 않으며, 검증된 미리보기 작업은 비공개 DB에 30분 동안 유지한다. 예약 정리와 다음 미리보기 시 만료 작업을 정리한다.
+
+## 필드 미사용·삭제 업데이트 (RPC 버전 5)
+
+버전 4까지 설치된 DB는 [필드 상태 마이그레이션](../supabase/migrations/20261009020025_field_lifecycle.sql)을 Supabase SQL Editor에서 실행한다. `praycontentfield.isActive`가 추가되며 기존 필드는 모두 사용 중으로 유지한다. 재실행해도 미사용 상태와 기존 데이터·비밀번호·세션은 초기화하지 않는다.
+
+이전 변경도 함께 적용하려면 `npm run db:prepare -- --schema-only`로 생성한 `.local/supabase-setup.sql`을 실행한다. 기본 테이블을 직접 설치해 이력이 없는 DB에는 `--existing-schema`를 추가한다. SQL 적용 후 `npm run db:check`로 버전 5를 확인한다. 이 명령들은 원격 DB에 자동으로 마이그레이션을 적용하지 않는다.
+
+관리자 **필드 관리**에서 다음 작업을 할 수 있다.
+
+- **미사용으로 전환**: 작성·목록·상세·그룹화·필터·집계·엑셀에서 제외한다. 기존 값·목록 표시 선택·첨부파일·필드 설정은 보존한다. 다른 필드의 일반 수정이나 엑셀 수정으로 보존된 값이 사라지지 않는다.
+- **다시 사용**: 보존한 값과 기존 조회 설정을 다시 표시한다. 모든 필드가 미사용이어도 필드 관리에는 전체 필드가 표시된다.
+- **삭제**: 미사용 필드만 삭제할 수 있다. 확인 모달에서 확정하면 필드 정의와 모든 기도부탁의 해당 값·목록 표시 선택을 영구 제거한다. 기도부탁 자체와 다른 필드의 값은 유지한다. 해당 첨부파일은 즉시 조회할 수 없게 되며, S3 객체는 아래 예약 정리가 삭제한다. 실패한 삭제는 재시도한다.
+
+일반 조회 RPC는 사용 중인 필드와 값만 반환한다. 관리자 전체 필드 조회·상태 변경·삭제는 별도 권한 검사로 보호한다. 상태 변경 시 오래된 작성 폼·엑셀 미리보기는 저장을 거부하며, 다시 불러온 뒤 진행해야 한다. 업로드 중인 파일은 완료·실패 또는 만료까지 정리 기록을 유지한다.
 
 ## 이전 DB에서 전환하기
 
@@ -90,7 +124,7 @@ npm run db:prepare -- --existing-schema --reset-passwords
 | `INITIAL_MEMBER_PASSWORD`, `INITIAL_SUB_ADMIN_PASSWORD`, `INITIAL_ADMIN_PASSWORD` | SQL Editor에서 최초 비밀번호 등록·복구할 때만 필요 |
 | `CRON_SECRET` | 파일 정리 예약 작업 인증. 초기 설치 SQL에도 같은 값의 해시를 등록 |
 
-DB 연결값 두 개와 교회 참여 비밀번호·S3 설정은 서로 다른 용도다. S3를 사용하는 경우 AWS 환경변수는 계속 필요하다. `NEXT_PUBLIC_` 변수는 사용하지 않는다.
+DB 연결값 두 개와 교회 참여 비밀번호·S3 설정은 서로 다른 용도다. S3를 사용하는 경우 AWS 환경변수는 계속 필요하다. 새 설정은 접두사 없는 서버 전용 이름을 사용한다. 기존 `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `NEXT_PUBLIC_APP_ORIGIN`, `NEXT_PUBLIC_AWS_*` 이름도 서버에서 호환한다. 두 이름이 함께 있으면 접두사 없는 값이 우선하며 실제 `.env`를 자동 변경하지 않는다.
 
 ## 접근 제어와 서버 모듈
 
@@ -133,7 +167,7 @@ S3 버킷의 퍼블릭 액세스 차단을 유지한다. 앱의 업로드·다�
 
 업로드는 4MB까지 허용한다. 이미지 JPG·PNG·WebP·GIF와 문서 PDF·DOCX·XLSX·PPTX를 지원하며 서버에서 실제 형식을 검사한다. DB가 고유 객체 키를 생성하므로 사용자 지정 S3 경로를 받지 않는다. 앱 브라우저 응답에는 UUID만 반환한다.
 
-5~10분마다 `POST /api/maintenance`를 `Authorization: Bearer <CRON_SECRET>` 헤더로 호출한다. 미확정 파일은 1시간 후 정리 대상이며 S3 삭제 실패는 재시도한다. `CRON_SECRET`을 바꾸면 `db:prepare`로 SQL을 다시 생성·적용해 DB 해시도 갱신한다. 버킷 버전 관리가 켜져 있으면 비현재 버전은 별도 수명 주기 정책으로 정리한다.
+5~10분마다 `POST /api/maintenance`를 `Authorization: Bearer <CRON_SECRET>` 헤더로 호출한다. 미확정 파일은 1시간 후, 엑셀 미리보기는 30분 후 정리 대상이며 S3 삭제 실패는 재시도한다. `CRON_SECRET`을 바꾸면 `db:prepare`로 SQL을 다시 생성·적용해 DB 해시도 갱신한다. 버킷 버전 관리가 켜져 있으면 비현재 버전은 별도 수명 주기 정책으로 정리한다.
 
 ## 검증과 연결 없는 미리보기
 
@@ -154,13 +188,13 @@ npm run start -- --hostname 127.0.0.1 --port 3000
 node --conditions=react-server --import tsx scripts/preview.ts
 ```
 
-`http://localhost:3100`에 접속한다. 테스트 전용 비밀번호는 `tests/helpers.ts`의 `TEST_PASSWORDS`에 있다. 미리보기는 메모리 DB와 파일만 사용하고 종료 시 사라진다.
+Next 서버를 다른 포트에서 실행한다면 미리보기 명령 앞에 `PREVIEW_NEXT_PORT=3001`처럼 지정한다. `http://localhost:3100`에 접속한다. 테스트 전용 비밀번호는 `tests/helpers.ts`의 `TEST_PASSWORDS`에 있다. 미리보기는 메모리 DB와 파일만 사용하고 종료 시 사라진다.
 
 | 역할 | 허용 작업 |
 | --- | --- |
-| 비인증 | 목록·상세·그룹화·필터링·게시된 첨부파일 조회, 설치 버전 확인 |
+| 비인증 | 목록·상세·그룹화·필터링·게시된 첨부파일 조회, 집계·엑셀 다운로드·작성 양식·설치 버전 확인 |
 | `member` | 기도부탁 작성·조회·그룹화·필터링·첨부파일 조회 |
-| `sub-admin` | 구성원 권한과 모든 기도부탁 수정·삭제 |
-| `admin` | 모든 기능, 필드·그룹화·필터링 설정, 역할별 비밀번호 변경 |
+| `sub-admin` | 구성원 권한과 모든 기도부탁 수정·삭제·엑셀 일괄 업로드 |
+| `admin` | 모든 기능, 필드 순서·옵션 색상·그룹화·필터링·집계 설정, 역할별 비밀번호 변경 |
 
 개인 계정·가입 승인·개인별 작성자 확인은 구현 범위에 포함하지 않는다.

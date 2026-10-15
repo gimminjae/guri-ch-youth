@@ -1,16 +1,19 @@
 import "server-only";
 import { AppError, LIMITS, object, uuid } from "@/lib/domain";
+import { inspectWorkbook, previewWorkbook } from "./excel/service";
+import { writeWorkbook, type ExportSnapshot } from "./excel/workbook";
+import { EXCEL_LIMITS } from "./excel/zip-guard";
 import { createHash, timingSafeEqual } from "node:crypto";
 import type { Database } from "./database";
 import type { ObjectStorage } from "./storage/types";
 import { changePassword, cookieValue, getActor, login, logout, requireRole, sessionCookie } from "./auth";
 import { cleanupFiles, downloadFile, uploadFile } from "./files";
-import { deleteField, deletePrayer, getPrayer, listFields, queryPrayers, saveField, savePrayer } from "./repository";
+import { deleteField, deletePrayer, getPrayer, listFields, manageFields, queryPrayers, saveField, savePrayer, setFieldActive } from "./repository";
 
 function json(value: unknown, status = 200, headers: Record<string, string> = {}) {
   return Response.json(value, { status, headers: { "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff", ...headers } });
 }
-export function checkOrigin(request: Request, configuredOrigin = process.env.NEXT_PUBLIC_APP_ORIGIN) {
+export function checkOrigin(request: Request, configuredOrigin = process.env.APP_ORIGIN || process.env.NEXT_PUBLIC_APP_ORIGIN) {
   if (["GET", "HEAD"].includes(request.method)) return;
   const origin = request.headers.get("origin");
   const expected = configuredOrigin ? new URL(configuredOrigin).origin : process.env.NODE_ENV !== "production" ? new URL(request.url).origin : null;
@@ -45,6 +48,7 @@ export function createHandler(db: Database, storage: ObjectStorage, options: { o
   return async function handle(request: Request, path: string[]): Promise<Response> {
     try {
       const [resource, id] = path;
+      const appOrigin = new URL(options.origin || process.env.APP_ORIGIN || process.env.NEXT_PUBLIC_APP_ORIGIN || request.url).origin;
       if (path.length > 2) throw new AppError(404, "요청을 찾을 수 없습니다.");
       if (resource === "maintenance" && request.method === "POST" && !id) {
         const secret = process.env.CRON_SECRET;
@@ -63,6 +67,13 @@ export function createHandler(db: Database, storage: ObjectStorage, options: { o
         if (request.method === "GET") return json({ role: actor?.role ?? null });
         if (request.method === "DELETE") { await logout(db, actor); return json({ ok: true }, 200, { "Set-Cookie": sessionCookie("", 0) }); }
       }
+      if (resource === "excel" && id === "download" && request.method === "POST") {
+        const body = await bodyJson(request);
+        const snapshot: ExportSnapshot = body.template === true ? { fields: await listFields(db, actor), items: [], summaries: [], groups: [], total: 0, fieldRevision: "" } : await db.rpc("export", body, actor?.token);
+        const file = await writeWorkbook(snapshot, appOrigin, body.template === true);
+        return new Response(file, { headers: { "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "Content-Disposition": `attachment; filename="prayers${body.template === true ? "-template" : ""}.xlsx"`, "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" } });
+      }
+      if (resource === "prayers" && id === "summary" && request.method === "POST") return json(await db.rpc("summary", await bodyJson(request), actor?.token));
       // Public reads still use the validated RPC; mutations require a session below.
       if (resource === "fields" && !id && request.method === "GET") return json({ fields: await listFields(db, actor) });
       if (resource === "prayers" && id === "query" && request.method === "POST") return json(await queryPrayers(db, actor, await bodyJson(request)));
@@ -73,8 +84,27 @@ export function createHandler(db: Database, storage: ObjectStorage, options: { o
         return new Response(Buffer.from(result.bytes), { headers: { "Content-Type": result.mime, "Content-Disposition": `${inline ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(result.name).replace(/'/g, "%27")}`, "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff", "Content-Security-Policy": "default-src 'none'; sandbox" } });
       }
       const member = requireRole(actor);
+      if (resource === "excel") {
+        requireRole(member, ["admin", "sub-admin"]);
+        if (id === "commit" && request.method === "POST") return json(await db.rpc("import_commit", await bodyJson(request), member.token));
+        if ((id === "inspect" || id === "preview") && request.method === "POST") {
+          const bytes = await readBody(request, EXCEL_LIMITS.fileBytes + 65536);
+          let form: FormData;
+          try { form = await new Response(bytes, { headers: { "content-type": request.headers.get("content-type") ?? "" } }).formData(); } catch { throw new AppError(400, "엑셀 파일 요청을 확인해주세요."); }
+          const file = form.get("file");
+          if (!(file instanceof File) || !file.name.toLowerCase().endsWith(".xlsx")) throw new AppError(400, ".xlsx 파일을 선택해주세요.");
+          const fileBytes = new Uint8Array(await file.arrayBuffer());
+          if (id === "inspect") return json(await inspectWorkbook(db, member, fileBytes));
+          let settings: unknown;
+          try { settings = JSON.parse(String(form.get("settings"))); } catch { throw new AppError(400, "열 연결과 업로드 모드를 확인해주세요."); }
+          return json(await previewWorkbook(db, member, fileBytes, settings, appOrigin));
+        }
+      }
       if (resource === "fields") {
         requireRole(member, ["admin"]);
+        if (id === "manage" && request.method === "GET") return json({ fields: await manageFields(db, member) });
+        if (id === "order" && request.method === "PUT") return json(await db.rpc("reorder_fields", await bodyJson(request), member.token));
+        if (id && request.method === "PATCH") return json(await setFieldActive(db, member, uuid(id), await bodyJson(request)));
         if (!id && request.method === "POST") return json(await saveField(db, member, await bodyJson(request)), 201);
         if (id && request.method === "PUT") return json(await saveField(db, member, await bodyJson(request), uuid(id)));
         if (id && request.method === "DELETE") { await deleteField(db, member, uuid(id), (await bodyJson(request)).updateDateTime); return json({ ok: true }); }

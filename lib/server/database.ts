@@ -32,5 +32,5 @@ export function createDatabase(url: string, key: string, transport: typeof fetch
   };
 }
 export const database: Database = {
-  rpc: (action, payload, token) => createDatabase(requiredEnv("NEXT_PUBLIC_SUPABASE_URL"), requiredEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY")).rpc(action, payload, token),
+  rpc: (action, payload, token) => createDatabase(requiredEnv("SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_URL"), requiredEnv("SUPABASE_PUBLISHABLE_KEY", "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY")).rpc(action, payload, token),
 };

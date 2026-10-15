@@ -13,6 +13,7 @@
 }
 * { box-sizing: border-box; }
 html { color-scheme: light; }
+html:has(dialog[open]) { overflow: hidden; }
 body { margin: 0; background: var(--background); color: var(--ink); font-family: "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif; -webkit-font-smoothing: antialiased; }
 button, input, textarea, select { font-family: inherit; }
 button, a, input, textarea, select { -webkit-tap-highlight-color: transparent; }

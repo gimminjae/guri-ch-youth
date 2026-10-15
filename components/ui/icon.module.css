@@ -1,0 +1,6 @@
+.icon { display: inline-block; width: var(--icon-size); height: var(--icon-size); flex: 0 0 var(--icon-size); vertical-align: middle; }
+.icon[data-tone="sage"] { color: #477b65; }
+.icon[data-tone="blue"] { color: #527da8; }
+.icon[data-tone="rose"] { color: #b76e80; }
+.icon[data-tone="purple"] { color: #8870a5; }
+.icon[data-tone="amber"] { color: #aa793c; }
