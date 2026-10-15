@@ -6,6 +6,7 @@ import { EXCEL_LIMITS } from "./excel/zip-guard";
 import { createHash, timingSafeEqual } from "node:crypto";
 import type { Database } from "./database";
 import type { ObjectStorage } from "./storage/types";
+import { configuredAppOrigin } from "./config";
 import { changePassword, cookieValue, getActor, login, logout, requireRole, sessionCookie } from "./auth";
 import { cleanupFiles, downloadFile, uploadFile } from "./files";
 import { deleteField, deletePrayer, getPrayer, listFields, manageFields, queryPrayers, saveField, savePrayer, setFieldActive } from "./repository";
@@ -13,7 +14,7 @@ import { deleteField, deletePrayer, getPrayer, listFields, manageFields, queryPr
 function json(value: unknown, status = 200, headers: Record<string, string> = {}) {
   return Response.json(value, { status, headers: { "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff", ...headers } });
 }
-export function checkOrigin(request: Request, configuredOrigin = process.env.APP_ORIGIN || process.env.NEXT_PUBLIC_APP_ORIGIN) {
+export function checkOrigin(request: Request, configuredOrigin = configuredAppOrigin()) {
   if (["GET", "HEAD"].includes(request.method)) return;
   const origin = request.headers.get("origin");
   const expected = configuredOrigin ? new URL(configuredOrigin).origin : process.env.NODE_ENV !== "production" ? new URL(request.url).origin : null;
@@ -48,7 +49,7 @@ export function createHandler(db: Database, storage: ObjectStorage, options: { o
   return async function handle(request: Request, path: string[]): Promise<Response> {
     try {
       const [resource, id] = path;
-      const appOrigin = new URL(options.origin || process.env.APP_ORIGIN || process.env.NEXT_PUBLIC_APP_ORIGIN || request.url).origin;
+      const appOrigin = new URL(configuredAppOrigin(options.origin) || request.url).origin;
       if (path.length > 2) throw new AppError(404, "요청을 찾을 수 없습니다.");
       if (resource === "maintenance" && request.method === "POST" && !id) {
         const secret = process.env.CRON_SECRET;

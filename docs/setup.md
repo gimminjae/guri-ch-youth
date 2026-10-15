@@ -118,13 +118,29 @@ npm run db:prepare -- --existing-schema --reset-passwords
 | --- | --- |
 | `SUPABASE_URL` | Supabase 프로젝트 기본 URL |
 | `SUPABASE_PUBLISHABLE_KEY` | Data API 호출용 공개 키 |
-| `APP_ORIGIN` | 브라우저 요청 출처 검증. 운영에서는 실제 HTTPS 도메인 필수 |
+| `APP_ORIGIN` | 브라우저 요청 출처 검증. 운영 사이트의 HTTPS 주소. Netlify에서는 미설정 시 기본 사이트 주소 자동 인식 |
 | `AWS_REGION`, `S3_BUCKET` | S3 리전과 비공개 버킷 |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | S3 접근 권한이 있는 IAM 사용자의 액세스 키와 시크릿 키 |
 | `INITIAL_MEMBER_PASSWORD`, `INITIAL_SUB_ADMIN_PASSWORD`, `INITIAL_ADMIN_PASSWORD` | SQL Editor에서 최초 비밀번호 등록·복구할 때만 필요 |
 | `CRON_SECRET` | 파일 정리 예약 작업 인증. 초기 설치 SQL에도 같은 값의 해시를 등록 |
 
 DB 연결값 두 개와 교회 참여 비밀번호·S3 설정은 서로 다른 용도다. S3를 사용하는 경우 AWS 환경변수는 계속 필요하다. 새 설정은 접두사 없는 서버 전용 이름을 사용한다. 기존 `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `NEXT_PUBLIC_APP_ORIGIN`, `NEXT_PUBLIC_AWS_*` 이름도 서버에서 호환한다. 두 이름이 함께 있으면 접두사 없는 값이 우선하며 실제 `.env`를 자동 변경하지 않는다.
+
+### Netlify에서 페이지 진입 시 출처 오류가 나는 경우
+
+첫 목록 조회도 `POST /api/prayers/query`를 사용한다. 허용 출처에 개발용 `http://localhost:3000`이 남아 있으면 배포 사이트에서 목록을 조회할 때 `INVALID_ORIGIN` 오류가 난다.
+
+Netlify의 프로젝트 환경변수에서 다음 값을 설정한 후 재배포하면 기존 코드에서도 해결된다. 범위를 지정할 수 있다면 **Functions**를 포함한다.
+
+```dotenv
+APP_ORIGIN=https://guri-ch-youth.netlify.app
+```
+
+수정된 코드의 출처 설정 우선순위는 핸들러의 명시적 설정 → `APP_ORIGIN` → Netlify 운영 환경의 `URL` (`SITE_ID`가 있을 때) → 기존 `NEXT_PUBLIC_APP_ORIGIN`이다. 따라서 Netlify에서는 `APP_ORIGIN`을 비워두어도 기본 사이트 주소를 자동으로 인식하고, 이전 `NEXT_PUBLIC_APP_ORIGIN=http://localhost:3000`보다 우선한다. 명시적으로 설정한 `APP_ORIGIN`이 잘못되어 있다면 실제 주소로 수정하거나 제거해야 한다. 엑셀 첨부 링크에도 같은 주소 결정 규칙을 사용한다.
+
+Netlify는 `URL`·`SITE_ID`를 함수 실행 시 제공한다. `netlify.toml`에 선언한 환경변수는 서버 함수에 전달되지 않으므로 수동 설정은 Netlify UI/CLI/API를 사용한다. 환경변수 변경은 새 배포부터 적용된다. [Netlify 함수 환경변수 공식 문서](https://docs.netlify.com/build/functions/environment-variables/)
+
+다른 운영 호스트에서는 `APP_ORIGIN`을 설정해야 한다. 출처가 없는 요청, 다른 도메인·포트, `cross-site` 요청은 계속 거부하며, 요청의 `Host`나 전달 헤더를 운영 허용 출처로 사용하지 않는다.
 
 ## 접근 제어와 서버 모듈
 

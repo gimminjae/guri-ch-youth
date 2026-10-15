@@ -179,6 +179,19 @@ Supabase CLI `db advisors --local --type security --fail-on error`는 로컬 DB(
 
 임시 PGlite와 메모리 저장소를 이용한 검증이다. 실제 Supabase/S3 연결이나 모바일 실기기 검증은 포함하지 않는다.
 
+## Netlify 페이지 진입 출처 오류 (2026-10-15)
+
+배포 사이트의 공개 목록 API에서 실제 출처 `https://guri-ch-youth.netlify.app`은 403 `INVALID_ORIGIN`, 개발 출처 `http://localhost:3000`은 200으로 재현했다. 응답의 기도 내용이나 연결 비밀값은 출력하지 않았다.
+
+`APP_ORIGIN`을 명시하지 않은 Netlify 운영 환경에서는 함수 런타임의 `SITE_ID`·`URL`을 사용하도록 수정했다. 이 값은 기존 `NEXT_PUBLIC_APP_ORIGIN`보다 우선하며, 명시적 핸들러 설정과 `APP_ORIGIN`은 여전히 우선한다. 엑셀 첨부 링크와 요청 출처 검사는 같은 주소 결정 함수를 사용한다.
+
+- 7개 회귀 테스트를 추가했다. Netlify 환경에서 초기 세션·필드·목록·집계 조회와 로그인, 세션 없는 쓰기 거부, 외부·누락·불투명 출처 및 다른 포트 차단을 검증했다.
+- 운영 설정이 없을 때 요청 URL·Host·전달 헤더를 신뢰하지 않는지, 로컬 개발과 기존 환경변수 호환성이 유지되는지 확인했다.
+- 린트·TypeScript·52개 테스트·프로덕션 빌드·diff 검사 통과.
+- 로컬 프로덕션 서버에 Netlify 런타임 환경을 주입하고 실제 설정된 DB의 공개 목록을 조회했다. 배포 출처 200, localhost 및 외부 출처 403을 확인했다. 조회 결과 본문은 출력하지 않았고 데이터 변경은 수행하지 않았다.
+
+Netlify 환경변수와 원격 배포는 변경하지 않았다. 배포 사이트 반영에는 코드 재배포가 필요하다. 기존 배포를 설정만으로 해결하려면 Netlify의 Functions 범위에 `APP_ORIGIN=https://guri-ch-youth.netlify.app`을 설정하고 재배포한다. 자세한 우선순위와 절차는 [설정 안내](setup.md)를 참고한다.
+
 ## 실제 연결 후 남은 확인
 
 1. `.env` 또는 `.env.local`의 Supabase URL·publishable key를 채우고, `db:prepare`로 만든 SQL을 SQL Editor에서 실행한다. `db:check`로 연결을 확인한다.
