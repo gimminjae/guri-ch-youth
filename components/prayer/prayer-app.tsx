@@ -16,7 +16,7 @@ import { FieldValue, GroupSection, PrayerGrid, formatDateTime } from "./prayer-l
 import ui from "@/components/ui/ui.module.css";
 import styles from "./prayer.module.css";
 
-type View = { kind: "new" | "fields" | "passwords" | "auth" | "excel" } | { kind: "detail" | "edit" | "delete"; prayer: Prayer } | null;
+type View = { kind: "new" | "fields" | "passwords" | "auth" } | { kind: "excel"; upload?: boolean } | { kind: "detail" | "edit" | "delete"; prayer: Prayer } | null;
 export function PrayerApp() {
   const [role, setRole] = useState<Role | null>(null), [checking, setChecking] = useState(true);
   const [fields, setFields] = useState<Field[]>([]), [ready, setReady] = useState(false);
@@ -49,6 +49,7 @@ export function PrayerApp() {
       <nav className={styles.headerActions} aria-label="참여 및 관리 메뉴">
         {role && <Badge accent>{ROLE_LABELS[role]}</Badge>}
         {role === "admin" && <><Button variant="ghost" icon="fields" small onClick={() => setView({ kind: "fields" })}>필드 관리</Button><Button variant="ghost" icon="key" small onClick={() => setView({ kind: "passwords" })}>비밀번호 관리</Button></>}
+        {canManage(role) && <Button variant="secondary" icon="upload" small disabled={!ready || !fields.length} onClick={() => setView({ kind: "excel", upload: true })}>엑셀 일괄 등록</Button>}
         <Button variant="secondary" icon="user" small disabled={checking} aria-haspopup="dialog" onClick={() => setView({ kind: "auth" })}>{checking ? "권한 확인 중…" : role ? "권한 변경" : "참여하기"}</Button>
         {role && <Button variant="ghost" icon="logout" small busy={busy} onClick={async () => { setBusy(true); try { await api("session", "DELETE"); clearSession(); setNotice("참여를 종료했습니다. 기도부탁은 계속 볼 수 있어요."); setError(""); } catch (e) { setError(messageOf(e)); } finally { setBusy(false); } }}>나가기</Button>}
       </nav>
@@ -71,7 +72,7 @@ export function PrayerApp() {
         </div>
     </main>
     <footer className={styles.footer}><span>구리교회 청년회</span><Icon name="heart" size={16} tone="rose" /></footer>
-    {view?.kind === "excel" && <ExcelMenu role={role} filters={filters} groupBy={groupBy} onClose={() => setView(null)} onImported={(count) => { setView(null); setPage(1); setRefresh((n) => n + 1); setNotice(`엑셀 자료 ${count}건을 저장했습니다.`); }} />}
+    {view?.kind === "excel" && <ExcelMenu role={role} filters={filters} groupBy={groupBy} initialAction={view.upload ? "upload" : "download"} onClose={() => setView(null)} onImported={(count) => { setView(null); setPage(1); setRefresh((n) => n + 1); setNotice(`엑셀 자료 ${count}건을 저장했습니다.`); }} />}
     {view?.kind === "auth" && <ParticipationLogin initialRole={role ?? "member"} onClose={() => setView(null)} onLogin={(r) => { setRole(r); setView(null); setError(""); setNotice(`${ROLE_LABELS[r]} 권한으로 인증했습니다.`); setRefresh((n) => n + 1); }} />}
     {view?.kind === "new" && role && <PrayerEditor fields={fields} onClose={() => setView(null)} onSaved={saved} />}
     {view?.kind === "edit" && canManage(role) && <PrayerEditor fields={fields} prayer={view.prayer} onClose={() => setView({ kind: "detail", prayer: view.prayer })} onSaved={saved} />}
