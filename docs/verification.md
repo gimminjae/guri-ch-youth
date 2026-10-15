@@ -206,6 +206,18 @@ Netlify 환경변수와 원격 배포는 변경하지 않았다. 배포 사이�
 
 브라우저 확장 프로그램의 파일 URL 접근 권한과 기본 파일 선택 창 조작 권한이 없어 브라우저의 파일 선택부터 확정 클릭까지는 검증하지 못했다. 업로드·미리보기·저장은 로컬 HTTP와 통합 테스트로 검증했다. 실제 Supabase/S3 데이터와 원격 배포는 변경하지 않았다.
 
+## 배포 빌드의 엑셀 업로드 바이너리 오류 (2026-10-15)
+
+Turbopack이 worker 생성 시 `workerData`를 객체로 펼쳐 런타임 전역값을 추가하면서, 최상위 `Uint8Array`가 일반 객체가 되는 문제를 수정했다. 분석 입력을 `{ bytes }`로 전달하고 worker에서 `workerData.bytes`를 읽도록 했다. 기존 크기·시간·메모리 제한과 서버 전용 처리 경계는 유지한다.
+
+- 제공된 XLSX는 직접 실행 시 정상 분석됐지만, 수정 전 배포 worker에서는 `Buffer.from`의 `Received an instance of Object` 오류가 동일하게 재현됐다.
+- 수정 후 `next build`와 실제 `next start`의 multipart API를 통해 제공 파일의 2행·9열 분석이 200으로 완료됐다. DB 통신은 로컬 임시 PGlite 서버로 연결했다.
+- 같은 배포 서버에서 작성 양식 다운로드 → 테스트 데이터 2행 작성 → 검사 → 미리보기 → 일괄 저장을 확인했다. 숫자 `0`·불리언 `false`가 유지됐고 같은 작업 ID 재요청에도 총 2건으로 중복이 없었다. 제공 파일의 실제 내용은 등록하지 않았다.
+- worker 입력 객체 확장을 재현하는 회귀 테스트를 추가했다. 엑셀 관련 15개 테스트, 린트, TypeScript, 프로덕션 빌드, diff 검사가 통과했다.
+- 전체 테스트는 53개 중 50개 통과, 3개 실패다. 실패는 기존 `config.ts`의 `NEXT_PUBLIC_APP_ORIGIN` 우선 처리와 `origin.test.ts`의 `APP_ORIGIN`·Netlify URL 우선순위 기대가 불일치하는 항목이다. 이번 변경에는 출처 설정 변경이 없다.
+
+추가 DB 마이그레이션은 없다. 원격 Netlify에는 배포하지 않았으므로 수정 반영에는 재배포가 필요하다.
+
 ## 실제 연결 후 남은 확인
 
 1. `.env` 또는 `.env.local`의 Supabase URL·publishable key를 채우고, `db:prepare`로 만든 SQL을 SQL Editor에서 실행한다. `db:check`로 연결을 확인한다.

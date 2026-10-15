@@ -11,7 +11,9 @@ export const SYSTEM_COLUMNS = { __id: "기도부탁 ID", __version: "수정 버�
 export async function readWorkbook(bytes: Uint8Array): Promise<ParsedWorkbook> {
   guardXlsx(bytes);
   return new Promise((resolve, reject) => {
-    const worker = new Worker(path.join(process.cwd(), "lib/server/excel/parse-worker.mjs"), { workerData: bytes, resourceLimits: { maxOldGenerationSizeMb: 128 } });
+    // Turbopack spreads workerData to add runtime globals. Keep binary data nested
+    // so that its Uint8Array type survives that object spread in production builds.
+    const worker = new Worker(path.join(process.cwd(), "lib/server/excel/parse-worker.mjs"), { workerData: { bytes }, resourceLimits: { maxOldGenerationSizeMb: 128 } });
     const timer = setTimeout(() => { void worker.terminate(); reject(new AppError(413, "엑셀 분석 시간이 초과되었습니다. 파일을 나누어주세요.")); }, EXCEL_LIMITS.timeoutMs);
     worker.once("message", (result: ParsedWorkbook & { error?: string }) => { clearTimeout(timer); void worker.terminate(); if (result.error) reject(new AppError(400, result.error)); else resolve(result); });
     worker.once("error", () => { clearTimeout(timer); reject(new AppError(400, "엑셀 파일을 읽지 못했습니다. 일반 .xlsx 형식과 파일 크기를 확인해주세요.")); });
