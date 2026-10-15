@@ -10,6 +10,6 @@ export function requiredEnv(name: string, legacyName?: string): string {
 /** Netlify exposes URL and SITE_ID at function runtime, unlike build-only deploy URLs. */
 export function configuredAppOrigin(override?: string): string | undefined {
   const netlifyUrl = process.env.NODE_ENV === "production" && process.env.SITE_ID ? process.env.URL : undefined;
-  return [override, process.env.APP_ORIGIN, netlifyUrl, process.env.NEXT_PUBLIC_APP_ORIGIN]
+  return [override, process.env.NEXT_PUBLIC_APP_ORIGIN, netlifyUrl, process.env.NEXT_PUBLIC_APP_ORIGIN]
     .map((value) => value?.trim()).find(Boolean);
 }
